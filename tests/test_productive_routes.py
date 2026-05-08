@@ -167,12 +167,20 @@ def test_budget_reports_with_full_include(client: TestClient) -> None:
 # /reports/time_reports
 # ---------------------------------------------------------------------------
 def test_time_reports_id_format(client: TestClient) -> None:
-    """Pulse parses time-report IDs by string split on `weekly-YYYY-MM-DD-person-{id}` format."""
+    """Pulse's strict parser at resource_dashboard.py:307 splits the id on '-'
+    and rejects records where parts[2] != 'person'. The id must be:
+        time-report-person-{person_id}-{compact_date}
+    so split gives parts[0]='time' parts[1]='report' parts[2]='person' parts[3]={id}.
+    Date is compacted (no dashes) so it doesn't pollute the split."""
     resp = client.get("/productive/api/v2/reports/time_reports")
     body = resp.json()
     for row in body["data"]:
-        assert row["id"].startswith("weekly-")
-        assert "-person-" in row["id"]
+        parts = row["id"].split("-")
+        assert len(parts) >= 4, f"id must have ≥4 dash-separated parts: {row['id']}"
+        assert parts[2] == "person", f"parts[2] must be 'person': {row['id']}"
+        # parts[3] is the person_id and must match the relationship
+        rel_person_id = row["relationships"]["person"]["data"]["id"]
+        assert parts[3] == rel_person_id
 
 
 def test_time_reports_filter_by_date(client: TestClient) -> None:

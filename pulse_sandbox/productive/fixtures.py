@@ -517,7 +517,14 @@ BOOKINGS = [
 
 # ---------------------------------------------------------------------------
 # Time reports — per-person per-week with metrics in MINUTES
-# id format: "weekly-YYYY-MM-DD-person-{person_id}" (Pulse parses by string split)
+#
+# id format: "time-report-person-{person_id}-{compact_date}" — required by
+# Pulse's strict parser at resource_dashboard.py:307 which does:
+#     parts = record_id.split("-")
+#     if len(parts) < 4 or parts[2] != "person": SKIP
+# So the id MUST split into ≥4 dash-separated tokens with parts[2] == "person".
+# Date is rendered without dashes (compact YYYYMMDD) so it doesn't pollute
+# the split. Pulse's lenient parser also accepts this format.
 # ---------------------------------------------------------------------------
 def _time_report(
     person_id: str,
@@ -530,8 +537,9 @@ def _time_report(
     holiday: int = 0,
     time_off: int = 0,
 ) -> dict:
+    compact_date = week_start.replace("-", "")
     return {
-        "id": f"weekly-{week_start}-person-{person_id}",
+        "id": f"time-report-person-{person_id}-{compact_date}",
         "type": "time_reports",
         "attributes": {
             "worked_time": worked,
