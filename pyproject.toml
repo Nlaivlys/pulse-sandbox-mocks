@@ -23,20 +23,44 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = [
+# Core install ships SDK shims only — pure-stdlib, no heavy deps.
+# This lets Pulse `pip install pulse-sandbox-mocks` without dragging in fastapi
+# or pydantic 2.x (which would conflict with Pulse's pydantic 1.x via clerk-sdk-python).
+dependencies = []
+
+[project.optional-dependencies]
+# `pip install pulse-sandbox-mocks[server]` installs the HTTP mock server too.
+# Run this in the sandbox repo's own venv, not in Pulse's venv.
+server = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "pydantic>=2.6",
     "eval_type_backport>=0.2; python_version < '3.10'",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=4.1",
     "httpx>=0.27",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+branch = true
+source = ["pulse_sandbox"]
+omit = ["pulse_sandbox/cli.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
+
 [project.scripts]
+# CLI requires server extras (uvicorn) — entrypoint will fail with a clear error
+# if invoked without `pip install pulse-sandbox-mocks[server]`.
 pulse-sandbox = "pulse_sandbox.cli:main"
 
 [project.urls]

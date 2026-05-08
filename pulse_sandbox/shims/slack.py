@@ -40,11 +40,28 @@ class _SlackResponse:
         return self.data.get(key, default)
 
 
-class SlackApiError(Exception):
-    """Mirrors slack_sdk.errors.SlackApiError — exposes .response.get('error')."""
+# If slack_sdk is installed (Pulse's environment), inherit from the real
+# SlackApiError so consumers can `except slack_sdk.errors.SlackApiError`
+# and catch both real and shim instances. If slack_sdk isn't installed
+# (sandbox repo's own venv during standalone tests), fall back to Exception.
+try:
+    from slack_sdk.errors import SlackApiError as _RealSlackApiError
+
+    _SLACK_API_ERROR_BASE: type = _RealSlackApiError
+except ImportError:
+    _SLACK_API_ERROR_BASE = Exception
+
+
+class SlackApiError(_SLACK_API_ERROR_BASE):  # type: ignore[misc, valid-type]
+    """Mirrors slack_sdk.errors.SlackApiError — exposes .response.get('error').
+
+    Inherits from slack_sdk.errors.SlackApiError when available so consumers'
+    `except SlackApiError` blocks catch both real and shim instances.
+    """
 
     def __init__(self, message: str, response: dict) -> None:
-        super().__init__(message)
+        # slack_sdk's SlackApiError signature: (message, response)
+        super().__init__(message, response) if _SLACK_API_ERROR_BASE is not Exception else super().__init__(message)
         self.response = response
 
 
