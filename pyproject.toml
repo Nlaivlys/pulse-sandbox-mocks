@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulse-sandbox-mocks"
+version = "0.1.0"
+description = "Local sandbox infrastructure for the Pulse PMO platform — mock servers and SDK shims for HubSpot, Productive, OpenAI, Resend, Slack"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Sylvia Navarro", email = "nlaivlys@gmail.com" }
+]
+keywords = ["pulse", "sandbox", "mocks", "hubspot", "productive", "openai", "resend", "slack"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "eval_type_backport>=0.2; python_version < '3.10'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+pulse-sandbox = "pulse_sandbox.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Nlaivlys/pulse-sandbox-mocks"
+Repository = "https://github.com/Nlaivlys/pulse-sandbox-mocks"
+Issues = "https://github.com/Nlaivlys/pulse-sandbox-mocks/issues"
+
+[tool.setuptools.packages.find]
+include = ["pulse_sandbox*"]
