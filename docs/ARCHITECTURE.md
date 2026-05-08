@@ -3,6 +3,32 @@
 > Design rationale and how-to-extend for `pulse-sandbox-mocks`.
 > Last updated 2026-05-08 (v0.1.0).
 
+## Toggle contract (single switch)
+
+Pulse's sandbox mode is opt-in via a single env var:
+
+```
+PULSE_API_MODE=sandbox  # → all external services route to localhost:9000 mocks
+PULSE_API_MODE=live     # → real external APIs (default, production-safe)
+```
+
+The HubSpot and Productive base URLs auto-derive in Pulse's `config.py` and `services/hubspot.py` via a small `_resolve_api_base()` helper:
+
+```python
+def _resolve_api_base(env_var, real_url, sandbox_path):
+    explicit = os.getenv(env_var)
+    if explicit: return explicit                         # manual override wins
+    if PULSE_API_MODE == "sandbox":
+        return f"{SANDBOX_BASE_URL}{sandbox_path}"        # auto-derived
+    return real_url                                       # real prod URL
+```
+
+The OpenAI / Resend / Slack SDK shims switch via Pulse's `_sandbox_factory.py` keyed off the same `PULSE_API_MODE` (with optional per-service overrides for mix-and-match testing).
+
+Pulse exposes a `GET /api/runtime/info` endpoint (no auth required) that returns the active mode + resolved base URLs, used by the frontend to render a small `● SANDBOX` badge in the nav when local mocks are active.
+
+---
+
 ## Why this exists
 
 Pulse depends on six external services (HubSpot, Productive, OpenAI, Resend, Slack, Clerk). Local development against live APIs has three problems:

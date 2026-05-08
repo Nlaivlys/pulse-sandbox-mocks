@@ -41,21 +41,22 @@ bash scripts/start.sh
 
 ## Wire it up in Pulse
 
-In Pulse's `.env`:
+**Single switch:** in Pulse's `backend/.env`:
 
 ```bash
-# Master toggle (factories switch on this for SDK-based services)
 PULSE_API_MODE=sandbox
-
-# HTTP-based services — point at the mock server
-HUBSPOT_API_BASE=http://localhost:9000/hubspot
-PRODUCTIVE_API_BASE=http://localhost:9000/productive/api/v2
-
-# SDK-based services — factories will pick up the master toggle
-# (no per-service URLs needed)
 ```
 
-Set `PULSE_API_MODE=live` (or unset) to go back to real APIs.
+That's it. HubSpot and Productive base URLs auto-derive to `http://localhost:9000`. OpenAI / Resend / Slack SDK clients are swapped via Pulse's factory module. Set `PULSE_API_MODE=live` (or unset) to switch back to real APIs.
+
+Or use Pulse's helper scripts (located in the Pulse repo):
+
+```bash
+bash scripts/sandbox-on.sh   # flips to sandbox + restarts Pulse
+bash scripts/sandbox-off.sh  # flips to live + restarts Pulse
+```
+
+Pulse renders an amber `● SANDBOX` badge in its main nav while sandbox mode is active.
 
 ## Architecture
 
