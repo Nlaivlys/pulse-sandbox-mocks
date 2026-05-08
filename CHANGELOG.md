@@ -4,6 +4,43 @@ All notable changes to `pulse-sandbox-mocks` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-08
+
+### Added
+
+- **Profile system** — fixture data is now loaded from a profile module
+  selected by `PULSE_SANDBOX_PROFILE` (default `baseline`). Restructure
+  is a pure refactor in v0.2.0; existing routes/tests work unchanged.
+  - `pulse_sandbox/profiles/baseline.py` — current happy-path data with
+    namespaced constants (`HUBSPOT_*`, `PRODUCTIVE_*`)
+  - `pulse_sandbox/profiles/rich.py` — extends baseline with 5
+    deliberately-tuned HubSpot scenario deals + 1 company + 1 Productive
+    scenario
+  - `pulse_sandbox/profiles/__init__.py` — `load_active_profile()` loader
+    with empty-string fallback and unknown-profile error message
+- **`rich` profile scenario coverage:**
+  - `9101` OVERDUE-OPEN — open + closedate 7d in past
+  - `9102` STUCK-STAGE — open + 60d no movement (createdAt == updatedAt)
+  - `9103` ORPHAN — open + missing engagement_lead_name + service_type
+    (introduces new Echo Foundation company id 5005)
+  - `9104` JUST-CREATED — createdate today
+  - `9105` RECENT-WIN — closedwon + closedate yesterday
+  - Productive scenario only added for 9102 — keeps the "Missing
+    Productive Scenarios" warning testable across multiple deal types
+- **Tests:** 20 new in `tests/test_profiles.py` — loader behavior,
+  baseline counts, rich extensions, per-scenario data shape
+- **Docs:** `docs/FIXTURES.md` and `docs/ARCHITECTURE.md` updated with
+  profile system rationale and rich-profile inventory
+
+### Notes
+
+- Default behavior unchanged. Pulse loads `baseline` unless an operator
+  sets `PULSE_SANDBOX_PROFILE=rich` and restarts the sandbox.
+- A companion change in the Pulse repo (`api/services/_drift_history.py`)
+  adds a sandbox-mode shim for `deal_closedate_history` drift data,
+  with fake drift entries for deal IDs 9001/9003/9007/9101 to match the
+  sandbox profiles. See Pulse commit `9a1ffb7`.
+
 ## [0.1.1] — 2026-05-08
 
 ### Added

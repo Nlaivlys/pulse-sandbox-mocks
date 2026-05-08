@@ -1,7 +1,27 @@
 # Fixtures
 
 > Sample data structure and how to extend it.
-> Last updated 2026-05-08 (v0.1.0).
+> Last updated 2026-05-08 (v0.2.0).
+
+## Profile system
+
+Fixtures live in profile modules under `pulse_sandbox/profiles/`. Each profile module exports the full namespaced data set (`HUBSPOT_*`, `PRODUCTIVE_*`); `hubspot/fixtures.py` and `productive/fixtures.py` are thin re-export shims that read the active profile.
+
+Set `PULSE_SANDBOX_PROFILE` to switch (default `baseline`). Server restart required after changing the env var.
+
+```bash
+PULSE_SANDBOX_PROFILE=baseline pulse-sandbox   # current default
+PULSE_SANDBOX_PROFILE=rich     pulse-sandbox   # baseline + 5 scenario deals
+```
+
+Available profiles:
+
+| Profile | Purpose | Total HC Deals |
+|---|---|---|
+| `baseline` | Boots-and-renders happy path | 8 |
+| `rich` | Baseline + 5 deliberately-tuned scenario deals (each pinned to a Pulse warning/feature) | 13 |
+
+
 
 ## Philosophy
 
@@ -248,3 +268,59 @@ When Phase 2 lands, the anonymization rules:
 - Replace email domains with `@example.com`
 - Round dollar amounts to nearest $1k to obscure exact deal values
 - Keep custom field IDs and option IDs **unchanged** (those are config, not data)
+
+---
+
+## Rich profile — 5 scenario-tuned HubSpot deals
+
+The `rich` profile extends baseline with 5 additional deals, each pinned to a specific Pulse warning or feature. Activate via `PULSE_SANDBOX_PROFILE=rich`.
+
+| Deal ID | Scenario | Trigger Pinned | Productive Scenario? |
+|---|---|---|---|
+| **9101** | OVERDUE-OPEN — open + closedate 7 days in past | "Need Date Update" warning on HC Deals page | NO (also tests "missing scenarios") |
+| **9102** | STUCK-STAGE — open + 60d in same stage + `createdAt == updatedAt` | Staleness signal | YES |
+| **9103** | ORPHAN — open + missing `engagement_lead_name` + `service_type` | Data-quality alert | NO |
+| **9104** | JUST-CREATED — `createdate == today` | Freshness signal in pipeline analytics | NO |
+| **9105** | RECENT-WIN — `closedwon` + closedate yesterday | Recently-won pipeline accumulation | NO (won deals don't need scenarios) |
+
+Plus a new HubSpot company: **Echo Foundation** (id 5005) — owns deal 9103.
+
+**Productive scenario coverage is asymmetric on purpose:** only 9102 has a Productive scenario. The other 4 lack scenarios so the "Missing Productive Scenarios" warning fires for multiple deal types — mirrors the realistic case where most HC deals lack Productive forecasts.
+
+### How to extend
+
+Add a new scenario deal in `pulse_sandbox/profiles/rich.py`:
+
+```python
+_EXTRA_HS_DEALS.append({
+    "id": "9106",
+    "properties": _deal_props(
+        name="Your scenario name",
+        amount="...",
+        stage="...",
+        # ... other fields
+        closedate=_iso(_NOW + timedelta(days=...)),
+    ),
+    "createdAt": _iso(_NOW - timedelta(days=...)),
+    "updatedAt": _iso(_NOW - timedelta(days=...)),
+    "archived": False,
+})
+_EXTRA_DEAL_COMPANY_ASSOC["9106"] = "5001"  # link to company
+```
+
+If the scenario also needs a Productive scenario, append to `_EXTRA_PROD_SCENARIOS`.
+
+Add a corresponding test in `tests/test_profiles.py::TestRichScenarios`.
+
+### Pulse-side drift fixtures
+
+Drift history (`deal_closedate_history` table in Supabase) is Pulse-side, not external API. Sandbox covers it via shim in Pulse repo at `backend/api/services/_drift_history.py`. Currently fakes drift for deals 9001, 9003, 9007, and 9101. To add more, edit `_SANDBOX_DRIFT` in that module.
+
+### Adding a new profile
+
+1. Create `pulse_sandbox/profiles/{name}.py`
+2. Import baseline data + helpers (`_deal_props`, `_iso`, `_NOW`)
+3. Build extension lists/dicts
+4. Compose final exports: `HUBSPOT_DEALS = _BASE_DEALS + _EXTRA`
+5. Re-export all 22 baseline names (re-exported via wildcard import + extension)
+6. Add tests in `tests/test_profiles.py`

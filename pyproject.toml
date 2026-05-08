@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse-sandbox-mocks"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local sandbox infrastructure for the Pulse PMO platform — mock servers and SDK shims for HubSpot, Productive, OpenAI, Resend, Slack"
 readme = "README.md"
 requires-python = ">=3.9"

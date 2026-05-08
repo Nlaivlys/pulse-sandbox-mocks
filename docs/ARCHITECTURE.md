@@ -3,6 +3,49 @@
 > Design rationale and how-to-extend for `pulse-sandbox-mocks`.
 > Last updated 2026-05-08 (v0.1.0).
 
+## Profile system
+
+Fixture data is loaded from a profile module selected by `PULSE_SANDBOX_PROFILE` (default `baseline`). Profiles live under `pulse_sandbox/profiles/{name}.py`. Each profile exports the full namespaced data set (`HUBSPOT_*`, `PRODUCTIVE_*`); the service-local `fixtures.py` modules are thin re-export shims.
+
+### Why this design
+
+- **One env var, one config touch-point.** Switching scenarios doesn't require coordinating multiple env vars or fixture-file edits.
+- **Profile = scenario.** Each profile module is one place to reason about a complete dataset.
+- **Additive composition.** Non-baseline profiles import baseline and append, so baseline behavior never breaks accidentally.
+
+### Available profiles
+
+| Profile | What it adds |
+|---|---|
+| `baseline` | Default happy-path data (8 HC deals, 7 people, 5 projects, etc.) |
+| `rich` | Baseline + 5 scenario-tuned HubSpot deals + 1 company + 1 Productive scenario, each pinned to a specific Pulse warning |
+
+See [FIXTURES.md](./FIXTURES.md) for the full per-deal scenario inventory.
+
+### Loader behavior
+
+`pulse_sandbox/profiles/__init__.py` exposes `load_active_profile()`:
+
+```python
+from pulse_sandbox.profiles import load_active_profile
+profile = load_active_profile()  # reads PULSE_SANDBOX_PROFILE env var
+deals = profile.HUBSPOT_DEALS
+```
+
+Empty string or unset → `baseline`. Unknown profile name → `ModuleNotFoundError` with a helpful message listing available profiles.
+
+The env var is read at module load time, so changing the profile requires a server restart (consistent with how `PULSE_API_MODE` works).
+
+### Pulse-side drift shim (cross-repo coupling note)
+
+One Pulse-side concept needs a shim that lives in the Pulse repo, not here: **deal close-date drift history**. That data lives in Pulse's Supabase `deal_closedate_history` table — not an external API the sandbox can mock.
+
+Pulse handles it the same way as the OpenAI/Resend/Slack SDK shims: a service module (`backend/api/services/_drift_history.py`) checks `is_sandbox_mode()` and returns hardcoded fake drift entries for sandbox-tagged HubSpot deal IDs. Production code path is unchanged when sandbox mode is off.
+
+The fake-drift dict is sized to the sandbox profiles' deal IDs (9001, 9003, 9007 from baseline; 9101 from rich). Adding new sandbox scenario deals with drift means editing both the rich profile here AND the `_SANDBOX_DRIFT` dict in Pulse.
+
+---
+
 ## Toggle contract (single switch)
 
 Pulse's sandbox mode is opt-in via a single env var:
