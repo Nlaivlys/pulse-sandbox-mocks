@@ -613,3 +613,125 @@ BUDGET_REPORTS = [
         },
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# Scenarios — Productive's forecast/budget scenarios per deal.
+# Pulse hits GET /scenarios?filter[deal_id]={id}&page[size]=1 to count
+# whether a deal has any scenarios attached (used in the HC-deals view).
+#
+# Each deal here has 1–2 scenarios so Pulse's `len(data) > 0` check returns
+# truthy and the dashboard renders the "has scenarios" indicator.
+# ---------------------------------------------------------------------------
+SCENARIOS = [
+    {
+        "id": "1801",
+        "type": "scenarios",
+        "attributes": {
+            "name": "Acme Strategic Consulting — Q3 forecast",
+            "started_on": "2026-06-01",
+            "ended_on": "2026-09-30",
+            "color_id": 7,
+        },
+        "relationships": {"deal": {"data": {"type": "deals", "id": "601"}}},
+    },
+    {
+        "id": "1802",
+        "type": "scenarios",
+        "attributes": {
+            "name": "Acme Strategic Consulting — Stretch case",
+            "started_on": "2026-06-01",
+            "ended_on": "2026-12-31",
+            "color_id": 8,
+        },
+        "relationships": {"deal": {"data": {"type": "deals", "id": "601"}}},
+    },
+    {
+        "id": "1803",
+        "type": "scenarios",
+        "attributes": {
+            "name": "Bright Horizon — AI Support continuation",
+            "started_on": "2026-06-15",
+            "ended_on": "2026-12-15",
+            "color_id": 4,
+        },
+        "relationships": {"deal": {"data": {"type": "deals", "id": "602"}}},
+    },
+    {
+        "id": "1804",
+        "type": "scenarios",
+        "attributes": {
+            "name": "Cedar Valley — Pulse Phase 1 deployment",
+            "started_on": "2026-07-01",
+            "ended_on": "2026-10-31",
+            "color_id": 2,
+        },
+        "relationships": {"deal": {"data": {"type": "deals", "id": "603"}}},
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# Saved custom report — the "Client Engagement Utilization Report".
+# Pulse references this via env var CLIENT_ENG_UTIL_REPORT_ID (default 1591877).
+# Two endpoints exposed:
+#   GET /reports/{id}            — modern API path
+#   GET /reports/{id}/budgets    — legacy API path
+# Both return budget-shaped data with company + project sideloads, mirroring
+# what /reports/budget_reports returns but pre-filtered by the saved view.
+# ---------------------------------------------------------------------------
+CLIENT_ENG_UTIL_REPORT_ID = "1591877"
+
+SAVED_REPORT_BUDGETS = [
+    {
+        "id": "sr-901",
+        "type": "budgets",
+        "attributes": {
+            "name": "Acme Ministries — Strategic Consulting",
+            "budget_total": 12500000,  # cents = $125,000
+            "budget_used": 8125000,    # 65% utilization
+            "budget_remaining": 4375000,
+            "date": "2026-02-01",
+            "end_date": "2026-09-30",
+            "status": 2,  # active
+        },
+        "relationships": {
+            "project": {"data": {"type": "projects", "id": "801"}},
+            "company": {"data": {"type": "companies", "id": "501"}},
+        },
+    },
+    {
+        "id": "sr-902",
+        "type": "budgets",
+        "attributes": {
+            "name": "Bright Horizon — AI Support",
+            "budget_total": 3600000,
+            "budget_used": 2520000,    # 70% utilization
+            "budget_remaining": 1080000,
+            "date": "2026-02-09",
+            "end_date": "2026-08-07",
+            "status": 2,
+        },
+        "relationships": {
+            "project": {"data": {"type": "projects", "id": "802"}},
+            "company": {"data": {"type": "companies", "id": "502"}},
+        },
+    },
+    {
+        "id": "sr-903",
+        "type": "budgets",
+        "attributes": {
+            "name": "Cedar Valley — Pulse Deployment",
+            "budget_total": 6500000,
+            "budget_used": 1300000,    # 20% utilization (under 50%, won't appear in >=50% filter)
+            "budget_remaining": 5200000,
+            "date": "2026-04-15",
+            "end_date": "2026-10-31",
+            "status": 2,
+        },
+        "relationships": {
+            "project": {"data": {"type": "projects", "id": "803"}},
+            "company": {"data": {"type": "companies", "id": "503"}},
+        },
+    },
+]

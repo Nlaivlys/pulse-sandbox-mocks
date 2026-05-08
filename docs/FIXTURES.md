@@ -132,6 +132,39 @@ Linking person → service → deal → project.
 | 1203 | 703 | 1103 | 4.0 | 2026-05-01 → 2026-10-31 |
 | 1204 | 704 | 1101 | 2.0 | 2026-04-15 → 2026-08-15 |
 
+### Scenarios — 4 rows across 3 deals
+
+Productive's per-deal forecast scenarios. Pulse uses `GET /scenarios?filter[deal_id]={id}&page[size]=1` from `api/routes/hubspot.py:220` to count whether each HC deal has any scenarios attached.
+
+| ID | Name | Deal |
+|---|---|---|
+| 1801 | Acme Strategic Consulting — Q3 forecast | 601 |
+| 1802 | Acme Strategic Consulting — Stretch case | 601 |
+| 1803 | Bright Horizon — AI Support continuation | 602 |
+| 1804 | Cedar Valley — Pulse Phase 1 deployment | 603 |
+
+Deal 601 has 2 scenarios on purpose so the count-distinct logic exercises >1.
+
+### Saved Custom Report (id `1591877`) — 3 budget rows
+
+Productive's "Client Engagement Utilization Report." Pulse references this via env var `CLIENT_ENG_UTIL_REPORT_ID` (default `1591877`).
+
+Two URL paths exposed (Pulse falls through them):
+- `GET /reports/1591877/budgets` — legacy path
+- `GET /reports/1591877` — modern path
+
+Both return the same data: 3 budgets with `budget_total`, `budget_used`, and `budget_remaining` in cents. One budget at 65% utilization, one at 70%, one at 20% — so Pulse's `>=50%` filter renders 2 rows in the dashboard.
+
+| ID | Name | Total ($) | Used ($) | Util % |
+|---|---|---|---|---|
+| sr-901 | Acme Ministries — Strategic Consulting | 125,000 | 81,250 | 65% |
+| sr-902 | Bright Horizon — AI Support | 36,000 | 25,200 | 70% |
+| sr-903 | Cedar Valley — Pulse Deployment | 65,000 | 13,000 | 20% |
+
+The `include=company,project` query param is supported and sideloads the matching companies + projects from the main fixture set (so Pulse's relationship-resolution logic works without changes).
+
+If `CLIENT_ENG_UTIL_REPORT_ID` is overridden to anything other than `1591877`, the sandbox returns 404. To support custom IDs, override the constant `CLIENT_ENG_UTIL_REPORT_ID` in `pulse_sandbox/productive/fixtures.py`.
+
 ### Time Reports — 8 rows across 2 weeks
 
 All metrics in **minutes** (Pulse divides by 60 for hours).

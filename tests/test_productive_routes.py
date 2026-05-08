@@ -194,3 +194,105 @@ def test_time_reports_metrics_in_minutes(client: TestClient) -> None:
     # Time fields must be in MINUTES (Pulse divides by 60 for hours)
     expected_metrics = {"worked_time", "client_time", "internal_time", "scheduled_billable_time", "capacity_time"}
     assert expected_metrics.issubset(attrs.keys())
+
+
+# ---------------------------------------------------------------------------
+# /scenarios — Pulse hits this from api/routes/hubspot.py:220 to count
+# scenarios per HC deal. Pulse only checks `len(data) > 0`; sandbox just
+# needs to return shape-correct rows filtered by deal_id.
+# ---------------------------------------------------------------------------
+def test_scenarios_no_filter_returns_all(client: TestClient) -> None:
+    resp = client.get("/productive/api/v2/scenarios")
+    body = resp.json()
+    assert len(body["data"]) >= 4
+    assert body["data"][0]["type"] == "scenarios"
+
+
+def test_scenarios_filter_by_deal_id_returns_subset(client: TestClient) -> None:
+    """Pulse uses filter[deal_id]=601&page[size]=1 to count scenarios per deal."""
+    resp = client.get(
+        "/productive/api/v2/scenarios", params={"filter[deal_id]": "601", "page[size]": 1}
+    )
+    body = resp.json()
+    # Deal 601 has 2 scenarios in fixtures, but page[size]=1 caps the response
+    assert len(body["data"]) == 1
+    rel = body["data"][0]["relationships"]["deal"]["data"]
+    assert rel["id"] == "601"
+
+
+def test_scenarios_filter_unknown_deal_returns_empty(client: TestClient) -> None:
+    """Pulse counts len(data) — empty array means deal has no scenarios."""
+    resp = client.get(
+        "/productive/api/v2/scenarios", params={"filter[deal_id]": "9999999"}
+    )
+    body = resp.json()
+    assert body["data"] == []
+
+
+# ---------------------------------------------------------------------------
+# Saved custom report — /reports/{report_id} and /reports/{report_id}/budgets
+# Pulse references this via env var CLIENT_ENG_UTIL_REPORT_ID (default 1591877)
+# ---------------------------------------------------------------------------
+def test_saved_report_budgets_legacy_path(client: TestClient) -> None:
+    resp = client.get(
+        "/productive/api/v2/reports/1591877/budgets",
+        params={"page[size]": 200, "include": "company,project"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["data"]) >= 3
+    # Pulse parses budget_total + budget_used in cents
+    first = body["data"][0]
+    assert "budget_total" in first["attributes"]
+    assert "budget_used" in first["attributes"]
+    # Sideloads
+    types = {item["type"] for item in body["included"]}
+    assert {"companies", "projects"}.issubset(types)
+
+
+def test_saved_report_modern_path(client: TestClient) -> None:
+    resp = client.get(
+        "/productive/api/v2/reports/1591877",
+        params={"page[size]": 200, "include": "company,project"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["data"]) >= 3
+
+
+def test_saved_report_unknown_id_returns_404(client: TestClient) -> None:
+    resp = client.get("/productive/api/v2/reports/9999999")
+    assert resp.status_code == 404
+
+
+def test_saved_report_data_has_50pct_utilization_examples(client: TestClient) -> None:
+    """The report's purpose is to surface budgets >= 50% utilization. Sandbox
+    fixtures include at least one budget at >=50% so Pulse's filter renders
+    a non-empty result."""
+    resp = client.get("/productive/api/v2/reports/1591877/budgets")
+    body = resp.json()
+    over_50 = [
+        b for b in body["data"]
+        if b["attributes"]["budget_total"]
+        and (b["attributes"]["budget_used"] / b["attributes"]["budget_total"]) >= 0.5
+    ]
+    assert len(over_50) >= 1, "fixtures should include >=1 budget at >=50% utilization"
+
+
+def test_pre_existing_budget_reports_endpoint_still_works(client: TestClient) -> None:
+    """Regression guard: /reports/budget_reports must still match its specific
+    handler, not be captured by the new /reports/{report_id} parametric route."""
+    resp = client.get("/productive/api/v2/reports/budget_reports")
+    assert resp.status_code == 200
+    body = resp.json()
+    # budget_reports endpoint returns budget_reports type, not budgets
+    assert body["data"][0]["type"] == "budget_reports"
+
+
+def test_pre_existing_time_reports_endpoint_still_works(client: TestClient) -> None:
+    """Regression guard: /reports/time_reports must still match its specific
+    handler, not be captured by the new /reports/{report_id} parametric route."""
+    resp = client.get("/productive/api/v2/reports/time_reports")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["data"][0]["type"] == "time_reports"

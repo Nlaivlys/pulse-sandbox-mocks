@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from pulse_sandbox.productive import fixtures
 from pulse_sandbox.productive.jsonapi import envelope
@@ -195,3 +195,83 @@ async def time_reports(
     if filter_before:
         rows = [r for r in rows if r["attributes"]["date"] <= filter_before]
     return envelope(rows)
+
+
+# ---------------------------------------------------------------------------
+# Scenarios — Pulse hits this to count scenarios per deal
+# (api/routes/hubspot.py:220 — get_high_confidence_deals)
+# ---------------------------------------------------------------------------
+@router.get("/scenarios")
+async def list_scenarios(
+    filter_deal_id: str | None = Query(default=None, alias="filter[deal_id]"),
+    page_size: int = Query(default=200, alias="page[size]"),
+) -> dict[str, Any]:
+    """Mock GET /scenarios with optional filter[deal_id].
+
+    Pulse uses this with `filter[deal_id]={id}&page[size]=1` and counts the
+    `data` array length to decide whether a deal has scenarios.
+    """
+    rows = fixtures.SCENARIOS
+    if filter_deal_id:
+        rows = [
+            s for s in rows
+            if s.get("relationships", {}).get("deal", {}).get("data", {}).get("id") == filter_deal_id
+        ]
+    return envelope(rows[:page_size])
+
+
+# ---------------------------------------------------------------------------
+# Saved custom report — `/reports/{report_id}` and `/reports/{report_id}/budgets`
+#
+# Pulse code (and the legacy tests/test_saved_report_endpoint.py probe) accesses
+# the Client Engagement Utilization Report via env var CLIENT_ENG_UTIL_REPORT_ID
+# (default "1591877"). Both URL paths return budget-shaped data with company +
+# project sideloads, mirroring `/reports/budget_reports` but pre-filtered by
+# the saved view configured in Productive.
+#
+# Note: route ordering matters in FastAPI. /reports/{report_id}/budgets MUST be
+# declared before /reports/{report_id} so the more specific path wins.
+# ---------------------------------------------------------------------------
+def _saved_report_response(include: str | None) -> dict[str, Any]:
+    included: list[dict] = []
+    if include:
+        parts = [p.strip() for p in include.split(",")]
+        if "company" in parts:
+            included.extend(
+                _filter_included(fixtures.SAVED_REPORT_BUDGETS, "company", fixtures.COMPANIES, "companies")
+            )
+        if "project" in parts:
+            included.extend(
+                _filter_included(fixtures.SAVED_REPORT_BUDGETS, "project", fixtures.PROJECTS, "projects")
+            )
+    return envelope(fixtures.SAVED_REPORT_BUDGETS, included=included)
+
+
+@router.get("/reports/{report_id}/budgets")
+async def saved_report_budgets(
+    report_id: str,
+    include: str | None = Query(default=None),
+    page_size: int = Query(default=200, alias="page[size]"),
+) -> dict[str, Any]:
+    """Mock GET /reports/{report_id}/budgets — legacy path for saved reports."""
+    if report_id != fixtures.CLIENT_ENG_UTIL_REPORT_ID:
+        raise HTTPException(
+            status_code=404,
+            detail=f"saved report {report_id} not found in sandbox",
+        )
+    return _saved_report_response(include)
+
+
+@router.get("/reports/{report_id}")
+async def saved_report(
+    report_id: str,
+    include: str | None = Query(default=None),
+    page_size: int = Query(default=200, alias="page[size]"),
+) -> dict[str, Any]:
+    """Mock GET /reports/{report_id} — modern path for saved reports."""
+    if report_id != fixtures.CLIENT_ENG_UTIL_REPORT_ID:
+        raise HTTPException(
+            status_code=404,
+            detail=f"saved report {report_id} not found in sandbox",
+        )
+    return _saved_report_response(include)

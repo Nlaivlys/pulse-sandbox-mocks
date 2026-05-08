@@ -4,6 +4,36 @@ All notable changes to `pulse-sandbox-mocks` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-05-08
+
+### Added
+
+- `GET /scenarios?filter[deal_id]={id}` — Productive's per-deal forecast
+  scenarios. Pulse calls this from `api/routes/hubspot.py:220` to count
+  whether each HC deal has any scenarios attached. Sandbox returns 4
+  scenarios across deals 601 / 602 / 603 (deal 601 has 2 to exercise
+  count > 1).
+- `GET /reports/{report_id}` and `GET /reports/{report_id}/budgets` — saved
+  custom report endpoints. Pulse references the "Client Engagement
+  Utilization Report" via env var `CLIENT_ENG_UTIL_REPORT_ID` (default
+  `1591877`). Sandbox returns 3 budget rows with utilization at 65% / 70%
+  / 20%, matching Pulse's `>=50%` filter use case.
+- 9 new tests bringing total to 68 passing, 92% coverage.
+- Regression-guard tests confirming `/reports/budget_reports` and
+  `/reports/time_reports` still match their specific handlers, not the
+  new parametric `/reports/{report_id}` route.
+- `FIXTURES.md` updated with the 4 new scenario rows and the saved-report
+  budget table.
+
+### Notes
+
+- Live Pulse code paths surfaced these endpoints during the local dev
+  smoke test on 2026-05-08. The legacy `tests/test_saved_report_endpoint.py`
+  in Pulse uses `return True/False` instead of pytest assertions, so it
+  silently "passed" against 404s before this fix. With the new sandbox
+  endpoints in place, the test now passes against real data — though it
+  remains a malformed pytest test that should be cleaned up Pulse-side.
+
 ## [0.1.0] — 2026-05-08
 
 Initial MVP release. Phase 1 of the Pulse local-sandbox project.

@@ -11,7 +11,7 @@ from pulse_sandbox.productive.routes import router as productive_router
 app = FastAPI(
     title="Pulse Sandbox Mocks",
     description="Local mock servers for Pulse external API dependencies",
-    version="0.1.0",
+    version="0.1.1",
 )
 
 
@@ -19,7 +19,7 @@ app = FastAPI(
 def root() -> dict:
     return {
         "service": "pulse-sandbox-mocks",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "mounts": {
             "hubspot": "/hubspot/*  (mocks api.hubapi.com)",
             "productive": "/productive/api/v2/*  (mocks api.productive.io/api/v2)",
