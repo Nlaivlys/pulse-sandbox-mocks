@@ -172,11 +172,15 @@ async def budget_reports(
         parts = [p.strip() for p in include.split(",")]
         if "project" in parts:
             included.extend(_filter_included(fixtures.BUDGET_REPORTS, "project", fixtures.PROJECTS, "projects"))
-        if "budget" in parts or "budget.company" in parts:
-            included.extend(_filter_included(fixtures.BUDGET_REPORTS, "budget", fixtures.BUDGETS, "budgets"))
+        # The `budget` relationship from a budget_report points to a Productive
+        # `deal` (deals double as budgets in Productive's data model). Sideload
+        # the matching deals — Pulse parses these to resolve project + company.
+        if "budget" in parts or any(p.startswith("budget.") for p in parts):
+            included.extend(_filter_included(fixtures.BUDGET_REPORTS, "budget", fixtures.DEALS, "deals"))
+        if "budget.project" in parts:
+            included.extend(_filter_included(fixtures.DEALS, "project", fixtures.PROJECTS, "projects"))
         if "budget.company" in parts:
-            # Companies referenced by budgets
-            included.extend(_filter_included(fixtures.BUDGETS, "company", fixtures.COMPANIES, "companies"))
+            included.extend(_filter_included(fixtures.DEALS, "company", fixtures.COMPANIES, "companies"))
     return envelope(fixtures.BUDGET_REPORTS, included=included)
 
 

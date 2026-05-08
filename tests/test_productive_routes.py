@@ -151,16 +151,57 @@ def test_list_deals_with_project_include(client: TestClient) -> None:
 # /reports/budget_reports
 # ---------------------------------------------------------------------------
 def test_budget_reports_with_full_include(client: TestClient) -> None:
+    """Sideload chain: budget_reports → deals (via budget rel) → project + company.
+
+    Pulse's parser at api/routes/resources.py:286-326 looks for `deals` in
+    `included` (not `budgets`) — Productive treats deals as budgets in this
+    response. The deal's project + company relationships then resolve names.
+    """
     resp = client.get(
         "/productive/api/v2/reports/budget_reports",
-        params={"include": "project,budget,budget.company", "group_by": "project"},
+        params={"include": "budget,budget.project,budget.company", "group_by": "budget"},
     )
     body = resp.json()
     types = {item["type"] for item in body["included"]}
-    assert {"projects", "budgets", "companies"}.issubset(types)
-    # Budget amounts should be in cents (Pulse divides by 100 for dollars)
+    assert {"deals", "projects", "companies"}.issubset(types), (
+        f"included must contain deals/projects/companies; got {types}"
+    )
+    # Budget rows must expose Pulse's expected attribute names
     first_report = body["data"][0]
-    assert first_report["attributes"]["budget_total"] >= 100000  # at least $1k
+    attrs = first_report["attributes"]
+    assert "average_budget_usage" in attrs, "Pulse skips rows missing average_budget_usage"
+    assert "total_budget_total" in attrs and attrs["total_budget_total"] >= 100000  # cents
+    assert "total_budget_used" in attrs
+
+
+def test_budget_reports_two_thirds_pass_50pct_filter(client: TestClient) -> None:
+    """Tuned utilizations: 65% / 70% / 20% — the >=50% filter should yield 2 rows."""
+    resp = client.get(
+        "/productive/api/v2/reports/budget_reports",
+        params={"include": "budget,budget.project,budget.company", "group_by": "budget"},
+    )
+    body = resp.json()
+    over_50 = [
+        r for r in body["data"]
+        if float(r["attributes"]["average_budget_usage"]) >= 50.0
+    ]
+    assert len(over_50) == 2, f"expected 2 budgets >=50%, got {len(over_50)}"
+
+
+def test_budget_reports_deal_relationships_resolve_to_company(client: TestClient) -> None:
+    """Verify the sideloaded deals carry both `project` and `company` rels —
+    Pulse needs both to populate company_name on the engagement."""
+    resp = client.get(
+        "/productive/api/v2/reports/budget_reports",
+        params={"include": "budget,budget.project,budget.company"},
+    )
+    body = resp.json()
+    deals_in_included = [item for item in body["included"] if item["type"] == "deals"]
+    assert len(deals_in_included) >= 3
+    for deal in deals_in_included:
+        rels = deal.get("relationships", {})
+        assert "project" in rels, f"deal {deal['id']} missing project relationship"
+        assert "company" in rels, f"deal {deal['id']} missing company relationship"
 
 
 # ---------------------------------------------------------------------------

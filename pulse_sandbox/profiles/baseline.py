@@ -660,7 +660,16 @@ def _person(
     allocation: int = 100,
     archived: bool = False,
 ) -> dict:
-    """Helper to build a person resource."""
+    """Helper to build a person resource.
+
+    The `allocation` parameter is intuitive 0-100 (percent), but Productive
+    stores allocation as a 0-1 decimal fraction (1.0 = 100%, 0.5 = 50%).
+    Pulse's resolve_tier() reads this and snaps to the nearest tier in
+    backend/config.py TIER_MAP — 1.0 → T1 (100% target), 0.6 → T2 (60%),
+    0.5 → T5 (50%), 0.25 → T4 (25%), 0.0 → T6 (0%).
+    Values like 0.4 nearest-match to T5 (50% target).
+    """
+    allocation_fraction = round(allocation / 100.0, 2)
     return {
         "id": id_,
         "type": "people",
@@ -674,7 +683,8 @@ def _person(
             "custom_fields": {
                 EMPLOYEE_TYPE_FIELD_ID: employee_type_opt,
                 DEPLOYABLE_TEAM_FIELD_ID: OPT_BILLABLE_TEAM if not archived else None,
-                ALLOCATION_FIELD_ID: str(allocation),
+                # Decimal fraction (0-1) — Pulse expects this scale
+                ALLOCATION_FIELD_ID: f"{allocation_fraction}",
                 DISCIPLINE_FIELD_ID: "300001" if team_id == "401" else "300002",
             },
         },
@@ -684,14 +694,22 @@ def _person(
     }
 
 
+# Allocation values chosen to span Pulse's tier map and exercise different
+# billable-target lines on the bench-utilization chart:
+#   100 → T1 (100% target, 32h/week)
+#    80 → T3 ( 80% target, 25.6h/week)
+#    60 → T2 ( 60% target, 19.2h/week)  ← Sylvia's 60% request
+#    50 → T5 ( 50% target, 16h/week)    ← closest standard tier to 40%
+#    25 → T4 ( 25% target,  8h/week)
+#     0 → T6 (  0% target — placeholder/ops)
 PRODUCTIVE_PEOPLE = [
-    _person("701", "Avery", "Chen", "avery.chen@example.com", OPT_FTE, "401", 100),
-    _person("702", "Blake", "Park", "blake.park@example.com", OPT_FTE, "401", 100),
-    _person("703", "Charlie", "Brooks", "charlie.brooks@example.com", OPT_CONTRACTOR, "401", 60),
-    _person("704", "Devon", "Singh", "devon.singh@example.com", OPT_FTE, "402", 100),
-    _person("705", "Emerson", "Liu", "emerson.liu@example.com", OPT_FREELANCE, "403", 40),
-    _person("706", "Frankie", "Diaz", "frankie.diaz@example.com", OPT_PLACEHOLDER, "401", 0),
-    _person("707", "Grey", "Marsh", "grey.marsh@example.com", OPT_ADVISOR, "403", 20),
+    _person("701", "Avery", "Chen", "avery.chen@example.com", OPT_FTE, "401", 100),  # T1
+    _person("702", "Blake", "Park", "blake.park@example.com", OPT_FTE, "401", 60),   # T2 (60% target)
+    _person("703", "Charlie", "Brooks", "charlie.brooks@example.com", OPT_CONTRACTOR, "401", 50),  # T5 (50% target — closest to 40%)
+    _person("704", "Devon", "Singh", "devon.singh@example.com", OPT_FTE, "402", 80),  # T3 (80% target)
+    _person("705", "Emerson", "Liu", "emerson.liu@example.com", OPT_FREELANCE, "403", 50),  # T5
+    _person("706", "Frankie", "Diaz", "frankie.diaz@example.com", OPT_PLACEHOLDER, "401", 0),  # T6
+    _person("707", "Grey", "Marsh", "grey.marsh@example.com", OPT_ADVISOR, "403", 25),  # T4
 ]
 
 
@@ -866,6 +884,7 @@ PRODUCTIVE_DEALS = [
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "801"}},
+            "company": {"data": {"type": "companies", "id": "501"}},
         },
     },
     {
@@ -881,6 +900,7 @@ PRODUCTIVE_DEALS = [
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "802"}},
+            "company": {"data": {"type": "companies", "id": "502"}},
         },
     },
     {
@@ -896,6 +916,7 @@ PRODUCTIVE_DEALS = [
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "803"}},
+            "company": {"data": {"type": "companies", "id": "503"}},
         },
     },
 ]
@@ -1031,67 +1052,87 @@ def _time_report(
     }
 
 
+# Hours tuned so the chart auto-fits its X-axis to ~40h, making each FTE's
+# billable-target line (capacity × allocation%) visible:
+#   701 Avery (T1, target 40h): worked ~38h
+#   702 Blake (T2, target 24h): worked ~22h
+#   704 Devon (T3, target 32h): worked ~31h
+# Non-FTE rows (703 Charlie contractor, 705/707 freelance/advisor) round out
+# the data set without dictating axis range.
 PRODUCTIVE_TIME_REPORTS = [
     # Week of 2026-04-27
-    _time_report("701", "2026-04-27", worked=1800, client=1500, internal=300),
-    _time_report("702", "2026-04-27", worked=900, client=900, internal=0),
-    _time_report("703", "2026-04-27", worked=1200, client=1200, internal=0),
-    _time_report("704", "2026-04-27", worked=600, client=600, internal=0),
+    _time_report("701", "2026-04-27", worked=2280, client=2000, internal=280, scheduled_billable=2400),
+    _time_report("702", "2026-04-27", worked=1320, client=1200, internal=120, scheduled_billable=1440),
+    _time_report("703", "2026-04-27", worked=1080, client=900, internal=180, scheduled_billable=1200),
+    _time_report("704", "2026-04-27", worked=1860, client=1740, internal=120, scheduled_billable=1920),
+    _time_report("705", "2026-04-27", worked=720, client=600, internal=120, scheduled_billable=720),
+    _time_report("707", "2026-04-27", worked=540, client=480, internal=60, scheduled_billable=600),
     # Week of 2026-05-04 (current)
-    _time_report("701", "2026-05-04", worked=1740, client=1440, internal=300, scheduled_billable=1800),
-    _time_report("702", "2026-05-04", worked=900, client=900, internal=0),
-    _time_report("703", "2026-05-04", worked=1200, client=1200, internal=0),
-    _time_report("704", "2026-05-04", worked=480, client=480, internal=0),
+    _time_report("701", "2026-05-04", worked=2160, client=1880, internal=280, scheduled_billable=2400),
+    _time_report("702", "2026-05-04", worked=1260, client=1140, internal=120, scheduled_billable=1440),
+    _time_report("703", "2026-05-04", worked=1140, client=960, internal=180, scheduled_billable=1200),
+    _time_report("704", "2026-05-04", worked=1740, client=1620, internal=120, scheduled_billable=1920),
+    _time_report("705", "2026-05-04", worked=660, client=540, internal=120, scheduled_billable=720),
+    _time_report("707", "2026-05-04", worked=480, client=420, internal=60, scheduled_billable=600),
 ]
 
 
 # ---------------------------------------------------------------------------
-# Budget reports — group_by=project, with project + budget + budget.company sideloads
+# Budget reports — group_by=budget, returned by /reports/budget_reports.
+#
+# Pulse's parser at api/routes/resources.py:286-326 reads:
+#   attributes.average_budget_usage   — utilization % (rows missing this are skipped)
+#   attributes.total_budget_total     — total in CENTS
+#   attributes.total_budget_used      — used in CENTS
+#   relationships.budget.data.id      — looked up in `included` deals
+# Pulse uses the deal's project + company relationships to resolve names.
+#
+# Utilization is tuned so 2 of 3 budgets pass the >=50% filter on the
+# Client Health Monitor page; one stays under 50% to exercise the filter.
 # ---------------------------------------------------------------------------
 PRODUCTIVE_BUDGET_REPORTS = [
     {
         "id": "br-801",
         "type": "budget_reports",
         "attributes": {
-            "budget_used": 4200000,
-            "budget_total": 12500000,
-            "budget_remaining": 8300000,
-            "scheduled_time": 240000,
+            # Pulse reads these field names exactly:
+            "average_budget_usage": "65.0",  # 65% utilization — passes >=50% filter
+            "total_budget_total": 12500000,  # cents = $125,000
+            "total_budget_used": 8125000,    # cents = $81,250
             "name": "Acme Ministries — Strategic Consulting",
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "801"}},
-            "budget": {"data": {"type": "budgets", "id": "901"}},
+            # `budget` rel must point to a DEAL (Productive treats deals as budgets)
+            "budget": {"data": {"type": "deals", "id": "601"}},
         },
     },
     {
         "id": "br-802",
         "type": "budget_reports",
         "attributes": {
-            "budget_used": 1800000,
-            "budget_total": 3600000,
-            "budget_remaining": 1800000,
-            "scheduled_time": 90000,
+            "average_budget_usage": "70.0",  # 70% — passes >=50% filter
+            "total_budget_total": 3600000,
+            "total_budget_used": 2520000,
             "name": "Bright Horizon — AI Support",
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "802"}},
-            "budget": {"data": {"type": "budgets", "id": "902"}},
+            "budget": {"data": {"type": "deals", "id": "602"}},
         },
     },
     {
         "id": "br-803",
         "type": "budget_reports",
         "attributes": {
-            "budget_used": 800000,
-            "budget_total": 6500000,
-            "budget_remaining": 5700000,
-            "scheduled_time": 120000,
+            "average_budget_usage": "20.0",  # 20% — under threshold, filter excludes
+            "total_budget_total": 6500000,
+            "total_budget_used": 1300000,
             "name": "Cedar Valley — Pulse Deployment",
         },
         "relationships": {
             "project": {"data": {"type": "projects", "id": "803"}},
-            "budget": {"data": {"type": "budgets", "id": "903"}},
+            "budget": {"data": {"type": "deals", "id": "603"}},
         },
     },
 ]
